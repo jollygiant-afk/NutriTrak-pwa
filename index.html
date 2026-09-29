@@ -262,47 +262,69 @@
       updateAdminInputs();
     }
 
-    function renderTargets() {
-      const calEl = document.getElementById('top-targets');
-      const dailyTotals = state.daily.reduce((acc, item) => {
-        acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
-        return acc;
-      }, { cal: 0, p: 0, c: 0, f: 0 });
+function renderTargets() {
+  const calEl = document.getElementById('top-targets');
+  const dailyTotals = state.daily.reduce((acc, item) => {
+    acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
+    return acc;
+  }, { cal: 0, p: 0, c: 0, f: 0 });
 
-      const tgt = state.targets;
-      const remaining = {
-        cal: Math.max(0, tgt.cal - dailyTotals.cal),
-        p:   Math.max(0, Math.round(tgt.cal * (tgt.pPct/100)/4) - dailyTotals.p),
-        c:   Math.max(0, Math.round(tgt.cal * (tgt.cPct/100)/4) - dailyTotals.c),
-        f:   Math.max(0, Math.round(tgt.cal * (tgt.fPct/100)/9) - dailyTotals.f),
-      };
+  const tgt = state.targets;
+  // Straight pass-through: entered values are used as-is (no % → grams conversion)
+  // Math.max(0, ...) prevents negatives when you exceed your target
+  const remaining = {
+    cal: Math.max(0, tgt.cal - dailyTotals.cal),
+    p:   Math.max(0, tgt.pPct - dailyTotals.p),
+    c:   Math.max(0, tgt.cPct - dailyTotals.c),
+    f:   Math.max(0, tgt.fPct - dailyTotals.f),
+  };
 
-      const pill = (label, val, unit) => `<span class="pill">${label}: ${val}${unit}</span>`;
-      calEl.innerHTML = [
-        pill('Cal', remaining.cal, ''),
-        pill('P', remaining.p, 'g'),
-        pill('C', remaining.c, 'g'),
-        pill('F', remaining.f, 'g'),
-      ].join('');
-    }
+  // Uses .target-pill (matches CSS) with .label and .remain sub-elements
+  const pill = (label, val, unit) =>
+    `<span class="target-pill"><span class="label">${label}</span><span class="remain ok">${val}${unit}</span></span>`;
 
-    function addFood(item, customData) {
-      const data = customData || {
-        name: item.name || 'Unnamed',
-        cal: parseInt(item.cal) || 0,
-        p: parseInt(item.p) || 0,
-        c: parseInt(item.c) || 0,
-        f: parseInt(item.f) || 0,
-      };
-      if (!data.name) return alert('Enter a name');
-      state.daily.push(data);
-      saveState();
-      updateUI();
+  calEl.innerHTML = [
+    pill('Cal', remaining.cal, ''),
+    pill('P', remaining.p, 'g'),
+    pill('C', remaining.c, 'g'),
+    pill('F', remaining.f, 'g'),
+  ].join('');
+}
 
-      if(!customData) {
-        ['food-name', 'food-cal', 'food-p', 'food-c', 'food-f'].forEach(id => document.getElementById(id).value = '');
-      }
-    }
+function addFood(item, customData) {
+  // If item is missing (Scenario B: Manual Entry), we "hunt" for the values in the HTML
+  if (!item && !customData) {
+    item = {
+      name: document.getElementById('food-name').value,
+      cal:  document.getElementById('food-cal').value,
+      p:    document.getElementById('food-p').value,
+      c:    document.getElementById('food-c').value,
+      f:    document.getElementById('food-f').value,
+    };
+  }
+
+  const data = customData || {
+    name: item.name || 'Unnamed',
+    cal: parseInt(item.cal) || 0,
+    p:   parseInt(item.p) || 0,
+    c:   parseInt(item.c) || 0,
+    f:   parseInt(item.f) || 0,
+  };
+
+  if (!data.name || data.name === '') return alert('Enter a name');
+  
+  state.daily.push(data);
+  saveState();
+  updateUI();
+
+  // Clear inputs only if this was a manual entry
+  if(!customData) {
+    ['food-name', 'food-cal', 'food-p', 'food-c', 'food-f'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.value = '';
+    });
+  }
+}
 
     function renderDaily() {
       const list = document.getElementById('daily-list');
@@ -475,12 +497,13 @@
       URL.revokeObjectURL(url);
     }
 
-    function clearAllHistory() {
-      if (confirm('Clear all data?')) {
-        localStorage.clear();
-        location.reload();
-      }
-    }
+function clearAllHistory() {
+  if (confirm('Clear all history? Saved meals will be kept.')) {
+    state.history = [];
+    saveState();
+    renderHistory();
+  }
+}
 
     function archiveDay() {
       if (state.daily.length === 0) return alert('No entries to archive.');
