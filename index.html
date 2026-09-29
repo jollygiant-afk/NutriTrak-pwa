@@ -193,19 +193,21 @@
       </section>
 
       <!-- ADMIN VIEW -->
+<!-- ADMIN VIEW -->
       <section id="view-admin" class="view">
         <h2>Admin Panel</h2>
         <div class="card">
-           <h3>Daily Targets</h3>
+          <h3>Daily Targets</h3>
           <div class="form-row">
-            <div><label>Total Calories</label><input type="number" id="target-cal" onchange="updateTargets()"></div>
+            <div><label>Total Calories</label><input type="number" id="target-cal"></div>
           </div>
           <div class="form-row">
-            <div><label>Protein</label><input type="number" id="target-p-pct" onchange="updateTargets()"></div>
-            <div><label>Carbs</label><input type="number" id="target-c-pct" onchange="updateTargets()"></div>
-            <div><label>Fat</label><input type="number" id="target-f-pct" onchange="updateTargets()"></div>
+            <div><label>Protein</label><input type="number" id="target-p-pct"></div>
+            <div><label>Carbs</label><input type="number" id="target-c-pct"></div>
+            <div><label>Fat</label><input type="number" id="target-f-pct"></div>
           </div>
-          <p style="font-size: 0.8rem; opacity: 0.7;">Note: All values are measured in grams.</p>
+          <button class="btn btn-primary full" onclick="updateTargets()">Save Targets</button>
+          <p id="admin-msg" style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.75rem;">Note: All values are measured in grams.</p>
         </div>
       </section>
     </main>
@@ -362,13 +364,42 @@ function saveMeal() {
       updateUI();
     }
 
-    function updateTargets() {
-      state.targets.cal = parseInt(document.getElementById('target-cal').value) || 2000;
-      state.targets.pPct = parseInt(document.getElementById('target-p-pct').value) || 30;
-      state.targets.cPct = parseInt(document.getElementById('target-c-pct').value) || 40;
-      state.targets.fPct = parseInt(document.getElementById('target-f-pct').value) || 30;
+function updateTargets() {
+      const cal  = parseInt(document.getElementById('target-cal').value);
+      const pPct = parseInt(document.getElementById('target-p-pct').value);
+      const cPct = parseInt(document.getElementById('target-c-pct').value);
+      const fPct = parseInt(document.getElementById('target-f-pct').value);
+
+      // Guard: reject negative or non-finite values
+      if ([cal, pPct, cPct, fPct].some(v => !Number.isFinite(v) || v < 0)) {
+        return showAdminMsg('Targets must be non-negative numbers.', true);
+      }
+
+      // Guard: percentages must sum to 100 (within ±1 to tolerate rounding)
+      if (Math.abs(pPct + cPct + fPct - 100) > 1) {
+        return showAdminMsg(`Protein + Carbs + Fat must equal 100 (got ${pPct + cPct + fPct}).`, true);
+      }
+
+      state.targets.cal  = cal;
+      state.targets.pPct = pPct;
+      state.targets.cPct = cPct;
+      state.targets.fPct = fPct;
+
       saveState();
-      updateUI();
+      updateUI();   // re-renders the top-banner pills via renderTopBar()
+      showAdminMsg('Targets saved.', false);
+    }
+
+    function showAdminMsg(text, isError) {
+      const el = document.getElementById('admin-msg');
+      el.textContent = text;
+      el.style.color = isError ? 'var(--danger)' : 'var(--ok)';
+      // Clear the inline color after 3s so the static "Note:" copy isn't permanently tinted
+      clearTimeout(showAdminMsg._t);
+      showAdminMsg._t = setTimeout(() => {
+        el.textContent = 'Note: All values are measured in grams.';
+        el.style.color = '';
+      }, 3000);
     }
 
     function updateAdminInputs() {
