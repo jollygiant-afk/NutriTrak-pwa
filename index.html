@@ -255,54 +255,50 @@
     }
 
     function updateUI() {
-      renderTopBar();
       renderDaily();
       renderSaved();
+      renderTargets();
       renderHistory();
+      updateAdminInputs();
     }
 
-    function renderTopBar() {
-      const totals = state.daily.reduce((acc, item) => {
+    function renderTargets() {
+      const calEl = document.getElementById('top-targets');
+      const dailyTotals = state.daily.reduce((acc, item) => {
         acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
         return acc;
       }, { cal: 0, p: 0, c: 0, f: 0 });
 
-      const targetGrams = {
-        p: (state.targets.cal * (state.targets.pPct / 100)) / 4,
-        c: (state.targets.cal * (state.targets.cPct / 100)) / 4,
-        f: (state.targets.cal * (state.targets.fPct / 100)) / 9
+      const tgt = state.targets;
+      const remaining = {
+        cal: Math.max(0, tgt.cal - dailyTotals.cal),
+        p:   Math.max(0, Math.round(tgt.cal * (tgt.pPct/100)/4) - dailyTotals.p),
+        c:   Math.max(0, Math.round(tgt.cal * (tgt.cPct/100)/4) - dailyTotals.c),
+        f:   Math.max(0, Math.round(tgt.cal * (tgt.fPct/100)/9) - dailyTotals.f),
       };
 
-      const buildPill = (label, current, target, unit = 'g') => {
-        const diff = target - current;
-        const cls = diff < 0 ? 'danger' : (diff < 10 ? 'warn' : 'ok');
-        return `<div class="target-pill">
-          <span class="label">${label}</span>
-          <span class="remain ${cls}">${Math.round(diff)}${unit}</span>
-        </div>`;
-      };
-
-      document.getElementById('top-targets').innerHTML = 
-        buildPill('Cal', totals.cal, state.targets.cal, 'kcal') +
-        buildPill('P', totals.p, targetGrams.p) +
-        buildPill('C', totals.c, targetGrams.c) +
-        buildPill('F', totals.f, targetGrams.f);
+      const pill = (label, val, unit) => `<span class="pill">${label}: ${val}${unit}</span>`;
+      calEl.innerHTML = [
+        pill('Cal', remaining.cal, ''),
+        pill('P', remaining.p, 'g'),
+        pill('C', remaining.c, 'g'),
+        pill('F', remaining.f, 'g'),
+      ].join('');
     }
 
-    function addFood(customData = null) {
+    function addFood(item, customData) {
       const data = customData || {
-        name: document.getElementById('food-name').value,
-        cal: parseInt(document.getElementById('food-cal').value) || 0,
-        p: parseInt(document.getElementById('food-p').value) || 0,
-        c: parseInt(document.getElementById('food-c').value) || 0,
-        f: parseInt(document.getElementById('food-f').value) || 0,
+        name: item.name || 'Unnamed',
+        cal: parseInt(item.cal) || 0,
+        p: parseInt(item.p) || 0,
+        c: parseInt(item.c) || 0,
+        f: parseInt(item.f) || 0,
       };
-
       if (!data.name) return alert('Enter a name');
       state.daily.push(data);
       saveState();
       updateUI();
-      
+
       if(!customData) {
         ['food-name', 'food-cal', 'food-p', 'food-c', 'food-f'].forEach(id => document.getElementById(id).value = '');
       }
@@ -327,7 +323,7 @@
       updateUI();
     }
 
-function saveMeal() {
+    function saveMeal() {
       const meal = {
         name: document.getElementById('food-name').value,
         cal: parseInt(document.getElementById('food-cal').value) || 0,
@@ -351,7 +347,7 @@ function saveMeal() {
             <span class="item-macros">${item.cal}cal | P:${item.p} C:${item.c} F:${item.f}</span>
           </div>
           <div style="display:flex; gap: 0.5rem;">
-            <button class="btn btn-primary" onclick="addFood(${JSON.stringify(item).replace(/"/g, '&quot;')})">Add</button>
+            <button class="btn btn-primary" onclick='addFood(${JSON.stringify(item)})'>Add</button>
             <button class="btn btn-danger" onclick="removeSaved(${idx})">✕</button>
           </div>
         </div>
@@ -364,27 +360,27 @@ function saveMeal() {
       updateUI();
     }
 
-function updateTargets() {
+    function updateTargets() {
       const cal = parseInt(document.getElementById('target-cal').value) || 0;
       const p   = parseInt(document.getElementById('target-p-pct').value) || 0;
       const c   = parseInt(document.getElementById('target-c-pct').value) || 0;
       const f   = parseInt(document.getElementById('target-f-pct').value) || 0;
 
-      state.targets.cal = cal;
-      state.targets.pPct = p; // These keys remain same to avoid breaking other functions
+      state.targets.cal  = cal;
+      state.targets.pPct = p;
       state.targets.cPct = c;
       state.targets.fPct = f;
 
       saveState();
-      updateUI(); 
+      updateUI();
       showAdminMsg('Targets saved.', false);
     }
 
     function showAdminMsg(text, isError) {
       const el = document.getElementById('admin-msg');
+      if (!el) return;
       el.textContent = text;
       el.style.color = isError ? 'var(--danger)' : 'var(--ok)';
-      // Clear the inline color after 3s so the static "Note:" copy isn't permanently tinted
       clearTimeout(showAdminMsg._t);
       showAdminMsg._t = setTimeout(() => {
         el.textContent = 'Note: All values are measured in grams.';
@@ -393,15 +389,15 @@ function updateTargets() {
     }
 
     function updateAdminInputs() {
-      document.getElementById('target-cal').value = state.targets.cal;
-      document.getElementById('target-p-pct').value = state.targets.pPct;
-      document.getElementById('target-c-pct').value = state.targets.cPct;
-      document.getElementById('target-f-pct').value = state.targets.fPct;
+      document.getElementById('target-cal').value    = state.targets.cal;
+      document.getElementById('target-p-pct').value  = state.targets.pPct;
+      document.getElementById('target-c-pct').value  = state.targets.cPct;
+      document.getElementById('target-f-pct').value  = state.targets.fPct;
     }
 
-function renderHistory() {
+    function renderHistory() {
       const list = document.getElementById('history-list');
-      const dates = Object.keys(state.history).sort().reverse(); // newest first
+      const dates = Object.keys(state.history).sort().reverse();
 
       if (dates.length === 0) {
         list.innerHTML = '<p>No archived days yet. Use "Archive Day" on the Daily Log to save a completed day.</p>';
@@ -434,9 +430,9 @@ function renderHistory() {
       }).join('');
     }
 
-function exportHistory() {
+    function exportHistory() {
       const history = state.history;
-      const dates = Object.keys(history).sort().reverse(); // Newest first
+      const dates = Object.keys(history).sort().reverse(); // newest first
 
       if (dates.length === 0) {
         alert("No archived history to export.");
@@ -447,12 +443,11 @@ function exportHistory() {
 
       dates.forEach(date => {
         const day = history[date];
-        // Calculate totals for the archived day
         const totals = day.reduce((acc, item) => {
-          acc.cal += item.cal;
-          acc.p += item.p;
-          acc.c += item.c;
-          acc.f += item.f;
+          acc.cal += (Number(item.cal) || 0);
+          acc.p   += (Number(item.p)   || 0);
+          acc.c   += (Number(item.c)   || 0);
+          acc.f   += (Number(item.f)   || 0);
           return acc;
         }, { cal: 0, p: 0, c: 0, f: 0 });
 
@@ -463,6 +458,12 @@ function exportHistory() {
         text += `Fat: ${totals.f}g\n`;
         text += `Entries: ${day.length}\n`;
         text += `--------------------\n`;
+
+        // Also list each entry so non-zero items are visible
+        day.forEach(item => {
+          text += `  - ${item.name}: ${item.cal}cal | P:${item.p} C:${item.c} F:${item.f}\n`;
+        });
+        text += `\n`;
       });
 
       const blob = new Blob([text], { type: 'text/plain' });
@@ -475,7 +476,7 @@ function exportHistory() {
     }
 
     function clearAllHistory() {
-      if(confirm('Clear all data?')) {
+      if (confirm('Clear all data?')) {
         localStorage.clear();
         location.reload();
       }
@@ -483,8 +484,8 @@ function exportHistory() {
 
     function archiveDay() {
       if (state.daily.length === 0) return alert('No entries to archive.');
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      state.history[today] = [...state.daily]; // copy, don't reference
+      const today = new Date().toISOString().split('T')[0];
+      state.history[today] = [...state.daily];
       state.daily = [];
       saveState();
       updateUI();
@@ -500,9 +501,10 @@ function exportHistory() {
     function showView(viewId) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      
-      document.getElementById('view-' + viewId).classList.add('active');
-      event.currentTarget.classList.add('active');
+
+      const view = document.getElementById('view-' + viewId);
+      if (view) view.classList.add('active');
+      if (event && event.currentTarget) event.currentTarget.classList.add('active');
       toggleSidebar();
     }
 
