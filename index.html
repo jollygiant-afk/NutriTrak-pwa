@@ -365,20 +365,20 @@ function saveMeal() {
     }
 
 function updateTargets() {
-      const cal  = parseInt(document.getElementById('target-cal').value);
-      const pPct = parseInt(document.getElementById('target-p-pct').value);
-      const cPct = parseInt(document.getElementById('target-c-pct').value);
-      const fPct = parseInt(document.getElementById('target-f-pct').value);
+      const cal = parseInt(document.getElementById('target-cal').value) || 0;
+      const p   = parseInt(document.getElementById('target-p-pct').value) || 0;
+      const c   = parseInt(document.getElementById('target-c-pct').value) || 0;
+      const f   = parseInt(document.getElementById('target-f-pct').value) || 0;
 
-      // Guard: reject negative or non-finite values
-      if ([cal, pPct, cPct, fPct].some(v => !Number.isFinite(v) || v < 0)) {
-        return showAdminMsg('Targets must be non-negative numbers.', true);
-      }
+      state.targets.cal = cal;
+      state.targets.pPct = p; // These keys remain same to avoid breaking other functions
+      state.targets.cPct = c;
+      state.targets.fPct = f;
 
-      // Guard: percentages must sum to 100 (within ±1 to tolerate rounding)
-      if (Math.abs(pPct + cPct + fPct - 100) > 1) {
-        return showAdminMsg(`Protein + Carbs + Fat must equal 100 (got ${pPct + cPct + fPct}).`, true);
-      }
+      saveState();
+      updateUI(); 
+      showAdminMsg('Targets saved.', false);
+    }
 
       state.targets.cal  = cal;
       state.targets.pPct = pPct;
@@ -444,20 +444,44 @@ function renderHistory() {
       }).join('');
     }
 
-    function exportHistory() {
-      const totals = state.daily.reduce((acc, item) => {
-        acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
-        return acc;
-      }, { cal: 0, p: 0, c: 0, f: 0 });
-      
-      const date = new Date().toLocaleDateString();
-      const text = `Date: ${date}\nTotal Calories: ${totals.cal}\nProtein: ${totals.p}g\nCarbs: ${totals.c}g\nFat: ${totals.f}g`;
-      
+function exportHistory() {
+      const history = state.history;
+      const dates = Object.keys(history).sort().reverse(); // Newest first
+
+      if (dates.length === 0) {
+        alert("No archived history to export.");
+        return;
+      }
+
+      let text = "NUTRITION HISTORY EXPORT\n====================\n\n";
+
+      dates.forEach(date => {
+        const day = history[date];
+        // Calculate totals for the archived day
+        const totals = day.reduce((acc, item) => {
+          acc.cal += item.cal;
+          acc.p += item.p;
+          acc.c += item.c;
+          acc.f += item.f;
+          return acc;
+        }, { cal: 0, p: 0, c: 0, f: 0 });
+
+        text += `Date: ${date}\n`;
+        text += `Total Calories: ${totals.cal}\n`;
+        text += `Protein: ${totals.p}g\n`;
+        text += `Carbs: ${totals.c}g\n`;
+        text += `Fat: ${totals.f}g\n`;
+        text += `Entries: ${day.length}\n`;
+        text += `--------------------\n`;
+      });
+
       const blob = new Blob([text], { type: 'text/plain' });
-      const anchor = document.createElement('a');
-      anchor.href = URL.createObjectURL(blob);
-      anchor.download = `macros-${date}.txt`;
-      anchor.click();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `macros_history_${new Date().toISOString().slice(0,10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     function clearAllHistory() {
