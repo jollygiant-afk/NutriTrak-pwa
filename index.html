@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0c10" />
+  <meta name="description" content="Nutrition Tracker - local-first macro logger" />
+  <title>Nutrition Tracker</title>
+
+  <!-- PWA Manifest (Inline Data URI for single-file portability) -->
+  <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Nutrition%20Tracker%22,%22short_name%22:%22Macros%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%230b0c10%22,%22theme_color%22:%22%230b0c10%22}">
+
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --panel: #1f2833;
+      --panel-2: #2a3546;
+      --text: #c5c6c7;
+      --heading: #66fcf1;
+      --accent: #45a29e;
+      --accent-2: #5bc0be;
+      --danger: #ef4444;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --border: #374151;
+      --shadow: rgba(0,0,0,0.5);
+      --radius: 8px;
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: var(--font); line-height: 1.5; min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---------- Layout ---------- */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ---------- Topbar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50; background: var(--panel);
+      border-bottom: 1px solid var(--border); padding: 0.75rem 1rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .brand { display: flex; align-items: center; gap: 0.5rem; color: var(--heading); font-weight: 700; font-size: 1.1rem; }
+    .hamburger {
+      background: none; border: 1px solid var(--border); color: var(--heading);
+      border-radius: var(--radius); width: 2.25rem; height: 2.25rem;
+      display: grid; place-items: center; cursor: pointer;
+    }
+    .targets-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center; flex: 1; }
+    .target-pill {
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+      padding: 0.35rem 0.75rem; font-size: 0.82rem; display: flex; gap: 0.5rem; white-space: nowrap;
+    }
+    .target-pill .label { color: var(--heading); font-weight: 600; }
+    .target-pill .remain { font-family: var(--mono); }
+    .remain.ok { color: var(--ok); } .remain.warn { color: var(--warn); } .remain.danger { color: var(--danger); }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
+    }
+    .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; height: 100%; width: min(280px, 85vw);
+      background: var(--panel); border-right: 1px solid var(--border);
+      transform: translateX(-100%); transition: transform 0.25s ease; z-index: 101;
+      display: flex; flex-direction: column;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-title { color: var(--heading); font-weight: 700; }
+    .nav-list { list-style: none; margin: 0; padding: 0.5rem; flex: 1; overflow-y: auto; }
+    .nav-item {
+      width: 100%; text-align: left; background: none; border: none; color: var(--text);
+      padding: 0.75rem; border-radius: var(--radius); cursor: pointer;
+      display: flex; align-items: center; gap: 0.75rem; transition: 0.15s;
+    }
+    .nav-item:hover, .nav-item.active { background: var(--panel-2); color: var(--heading); }
+
+    /* ---------- Main Content ---------- */
+    main { flex: 1; padding: 1rem; max-width: 900px; margin: 0 auto; width: 100%; }
+    .view { display: none; }
+    .view.active { display: block; }
+    h2 { color: var(--heading); font-size: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+    
+    /* ---------- Forms & UI Elements ---------- */
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; color: var(--heading); margin-bottom: 0.25rem; font-weight: 600; }
+    input {
+      width: 100%; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); outline: none;
+    }
+    .btn {
+      padding: 0.6rem 1rem; border-radius: var(--radius); font-weight: 600; cursor: pointer;
+      border: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    
+    .list-item {
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;
+    }
+    .item-details { display: flex; flex-direction: column; }
+    .item-name { font-weight: 600; color: var(--accent-2); }
+    .item-macros { font-size: 0.8rem; font-family: var(--mono); opacity: 0.8; }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <header class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="brand">MacroTrack</div>
+      <div class="targets-bar" id="top-targets">
+        <!-- Dynamic Pills: Cal, P, C, F -->
+      </div>
+    </header>
+
+    <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Menu</span>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
+      <nav class="nav-list">
+        <button class="nav-item active" onclick="showView('daily')">📅 Daily Log</button>
+        <button class="nav-item" onclick="showView('saved')">🍱 Saved Meals</button>
+        <button class="nav-item" onclick="showView('history')">📜 History</button>
+        <button class="nav-item" onclick="showView('admin')">⚙️ Admin Panel</button>
+      </nav>
+    </aside>
+
+    <main>
+      <!-- DAILY LOG VIEW -->
+      <section id="view-daily" class="view active">
+        <h2>Daily Log</h2>
+        <div class="card">
+          <div class="form-row">
+            <div>
+              <label>Food/Meal</label>
+              <input type="text" id="food-name" placeholder="Egg, Chicken...">
+            </div>
+            <div>
+              <label>Calories</label>
+              <input type="number" id="food-cal" placeholder="0">
+            </div>
+            <div>
+              <label>Protein</label>
+              <input type="number" id="food-p" placeholder="0">
+            </div>
+            <div>
+              <label>Carbs</label>
+              <input type="number" id="food-c" placeholder="0">
+            </div>
+            <div>
+              <label>Fat</label>
+              <input type="number" id="food-f" placeholder="0">
+            </div>
+          </div>
+          <button class="btn btn-primary full" onclick="addFood()">Add Entry</button>
+        </div>
+        <div id="daily-list"></div>
+      </section>
+
+      <!-- SAVED MEALS VIEW -->
+      <section id="view-saved" class="view">
+        <h2>Saved Meals</h2>
+        <div class="card">
+          <div class="form-row">
+            <div><label>Meal Name</label><input type="text" id="save-name"></div>
+            <div><label>Cal</label><input type="number" id="save-cal"></div>
+            <div><label>P</label><input type="number" id="save-p"></div>
+            <div><label>C</label><input type="number" id="save-c"></div>
+            <div><label>F</label><input type="number" id="save-f"></div>
+          </div>
+          <button class="btn btn-primary full" onclick="saveMeal()">Save to Library</button>
+        </div>
+        <div id="saved-list"></div>
+      </section>
+
+      <!-- HISTORY VIEW -->
+      <section id="view-history" class="view">
+        <h2>History</h2>
+        <div class="card">
+          <button class="btn btn-secondary" onclick="exportHistory()">Export .txt</button>
+          <button class="btn btn-danger" onclick="clearAllHistory()">Wipe History</button>
+        </div>
+        <div id="history-list"></div>
+      </section>
+
+      <!-- ADMIN VIEW -->
+      <section id="view-admin" class="view">
+        <h2>Admin Panel</h2>
+        <div class="card">
+          <h3>Daily Targets</h3>
+          <div class="form-row">
+            <div><label>Total Calories</label><input type="number" id="target-cal" onchange="updateTargets()"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Protein %</label><input type="number" id="target-p-pct" onchange="updateTargets()"></div>
+            <div><label>Carbs %</label><input type="number" id="target-c-pct" onchange="updateTargets()"></div>
+            <div><label>Fat %</label><input type="number" id="target-f-pct" onchange="updateTargets()"></div>
+          </div>
+          <p style="font-size: 0.8rem; opacity: 0.7;">Note: Percentages should sum to 100%.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // --- State & Constants ---
+    let state = {
+      targets: { cal: 2000, pPct: 30, cPct: 40, fPct: 30 },
+      daily: [],
+      saved: [],
+      history: {}
+    };
+
+    const KEYS = {
+      TARGETS: 'nutri_targets',
+      DAILY: 'nutri_daily',
+      SAVED: 'nutri_saved',
+      HISTORY: 'nutri_history'
+    };
+
+    // --- Core Logic ---
+    function init() {
+      const savedTargets = localStorage.getItem(KEYS.TARGETS);
+      if (savedTargets) state.targets = JSON.parse(savedTargets);
+
+      const savedDaily = localStorage.getItem(KEYS.DAILY);
+      if (savedDaily) state.daily = JSON.parse(savedDaily);
+
+      const savedLib = localStorage.getItem(KEYS.SAVED);
+      if (savedLib) state.saved = JSON.parse(savedLib);
+
+      const savedHist = localStorage.getItem(KEYS.HISTORY);
+      if (savedHist) state.history = JSON.parse(savedHist);
+
+      updateUI();
+      updateAdminInputs();
+    }
+
+    function saveState() {
+      localStorage.setItem(KEYS.TARGETS, JSON.stringify(state.targets));
+      localStorage.setItem(KEYS.DAILY, JSON.stringify(state.daily));
+      localStorage.setItem(KEYS.SAVED, JSON.stringify(state.saved));
+      localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    }
+
+    function updateUI() {
+      renderTopBar();
+      renderDaily();
+      renderSaved();
+      renderHistory();
+    }
+
+    function renderTopBar() {
+      const totals = state.daily.reduce((acc, item) => {
+        acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
+        return acc;
+      }, { cal: 0, p: 0, c: 0, f: 0 });
+
+      const targetGrams = {
+        p: (state.targets.cal * (state.targets.pPct / 100)) / 4,
+        c: (state.targets.cal * (state.targets.cPct / 100)) / 4,
+        f: (state.targets.cal * (state.targets.fPct / 100)) / 9
+      };
+
+      const buildPill = (label, current, target, unit = 'g') => {
+        const diff = target - current;
+        const cls = diff < 0 ? 'danger' : (diff < 10 ? 'warn' : 'ok');
+        return `<div class="target-pill">
+          <span class="label">${label}</span>
+          <span class="remain ${cls}">${Math.round(diff)}${unit}</span>
+        </div>`;
+      };
+
+      document.getElementById('top-targets').innerHTML = 
+        buildPill('Cal', totals.cal, state.targets.cal, 'kcal') +
+        buildPill('P', totals.p, targetGrams.p) +
+        buildPill('C', totals.c, targetGrams.c) +
+        buildPill('F', totals.f, targetGrams.f);
+    }
+
+    function addFood(customData = null) {
+      const data = customData || {
+        name: document.getElementById('food-name').value,
+        cal: parseInt(document.getElementById('food-cal').value) || 0,
+        p: parseInt(document.getElementById('food-p').value) || 0,
+        c: parseInt(document.getElementById('food-c').value) || 0,
+        f: parseInt(document.getElementById('food-f').value) || 0,
+      };
+
+      if (!data.name) return alert('Enter a name');
+      state.daily.push(data);
+      saveState();
+      updateUI();
+      
+      if(!customData) {
+        ['food-name', 'food-cal', 'food-p', 'food-c', 'food-f'].forEach(id => document.getElementById(id).value = '');
+      }
+    }
+
+    function renderDaily() {
+      const list = document.getElementById('daily-list');
+      list.innerHTML = state.daily.map((item, idx) => `
+        <div class="list-item">
+          <div class="item-details">
+            <span class="item-name">${item.name}</span>
+            <span class="item-macros">${item.cal}cal | P:${item.p} C:${item.c} F:${item.f}</span>
+          </div>
+          <button class="btn btn-danger" onclick="removeDaily(${idx})">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function removeDaily(idx) {
+      state.daily.splice(idx, 1);
+      saveState();
+      updateUI();
+    }
+
+    function saveMeal() {
+      const meal = {
+        name: document.getElementById('save-name').value,
+        cal: parseInt(document.getElementById('save-cal').value) || 0,
+        p: parseInt(document.getElementById('save-p').value) || 0,
+        c: parseInt(document.getElementById('save-c').value) || 0,
+        f: parseInt(document.getElementById('save-f').value) || 0,
+      };
+      if (!meal.name) return;
+      state.saved.push(meal);
+      saveState();
+      updateUI();
+      ['save-name', 'save-cal', 'save-p', 'save-c', 'save-f'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function renderSaved() {
+      const list = document.getElementById('saved-list');
+      list.innerHTML = state.saved.map((item, idx) => `
+        <div class="list-item">
+          <div class="item-details">
+            <span class="item-name">${item.name}</span>
+            <span class="item-macros">${item.cal}cal | P:${item.p} C:${item.c} F:${item.f}</span>
+          </div>
+          <div style="display:flex; gap: 0.5rem;">
+            <button class="btn btn-primary" onclick="addFood(${JSON.stringify(item).replace(/"/g, '&quot;')})">Add</button>
+            <button class="btn btn-danger" onclick="removeSaved(${idx})">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function removeSaved(idx) {
+      state.saved.splice(idx, 1);
+      saveState();
+      updateUI();
+    }
+
+    function updateTargets() {
+      state.targets.cal = parseInt(document.getElementById('target-cal').value) || 2000;
+      state.targets.pPct = parseInt(document.getElementById('target-p-pct').value) || 30;
+      state.targets.cPct = parseInt(document.getElementById('target-c-pct').value) || 40;
+      state.targets.fPct = parseInt(document.getElementById('target-f-pct').value) || 30;
+      saveState();
+      updateUI();
+    }
+
+    function updateAdminInputs() {
+      document.getElementById('target-cal').value = state.targets.cal;
+      document.getElementById('target-p-pct').value = state.targets.pPct;
+      document.getElementById('target-c-pct').value = state.targets.cPct;
+      document.getElementById('target-f-pct').value = state.targets.fPct;
+    }
+
+    function renderHistory() {
+      // Simplified: history logic usually triggers on date change.
+      // For this MVP, we'll just show a placeholder or the current day's summary.
+      document.getElementById('history-list').innerHTML = '<p>History archive enabled. Export daily totals to .txt for long-term tracking.</p>';
+    }
+
+    function exportHistory() {
+      const totals = state.daily.reduce((acc, item) => {
+        acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
+        return acc;
+      }, { cal: 0, p: 0, c: 0, f: 0 });
+      
+      const date = new Date().toLocaleDateString();
+      const text = `Date: ${date}\nTotal Calories: ${totals.cal}\nProtein: ${totals.p}g\nCarbs: ${totals.c}g\nFat: ${totals.f}g`;
+      
+      const blob = new Blob([text], { type: 'text/plain' });
+      const anchor = document.createElement('a');
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = `macros-${date}.txt`;
+      anchor.click();
+    }
+
+    function clearAllHistory() {
+      if(confirm('Clear all data?')) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+
+    // --- Navigation & UX ---
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('overlay').classList.toggle('open');
+    }
+
+    function showView(viewId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      
+      document.getElementById('view-' + viewId).classList.add('active');
+      event.currentTarget.classList.add('active');
+      toggleSidebar();
+    }
+
+    // --- PWA Service Worker Registration ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swCode = `
+          const CACHE_NAME = 'macro-v1';
+          self.addEventListener('install', e => {
+            e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+          });
+          self.addEventListener('fetch', e => {
+            e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+          });
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(workerUrl).catch(console.error);
+      });
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
