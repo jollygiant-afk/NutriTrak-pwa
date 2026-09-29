@@ -161,15 +161,19 @@
               <label>Carbs</label>
               <input type="number" id="food-c" placeholder="0">
             </div>
-            <div>
-              <label>Fat</label>
-              <input type="number" id="food-f" placeholder="0">
-            </div>
+<div>
+            <label>Fat</label>
+            <input type="number" id="food-f" placeholder="0">
           </div>
-          <button class="btn btn-primary full" onclick="addFood()">Add Entry</button>
         </div>
-        <div id="daily-list"></div>
-      </section>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-primary" style="flex: 1;" onclick="addFood()">Add Entry</button>
+          <button class="btn btn-secondary" style="flex: 1;" onclick="saveMeal()">Save to Library</button>
+        </div>
+        <button class="btn btn-danger full" style="margin-top: 0.75rem;" onclick="archiveDay()">Archive</button>
+      </div>
+      <div id="daily-list"></div>
+    </section>
 
       <!-- SAVED MEALS VIEW -->
       <section id="view-saved" class="view">
@@ -201,16 +205,16 @@
       <section id="view-admin" class="view">
         <h2>Admin Panel</h2>
         <div class="card">
-          <h3>Daily Targets</h3>
+           <h3>Daily Targets</h3>
           <div class="form-row">
             <div><label>Total Calories</label><input type="number" id="target-cal" onchange="updateTargets()"></div>
           </div>
           <div class="form-row">
-            <div><label>Protein %</label><input type="number" id="target-p-pct" onchange="updateTargets()"></div>
-            <div><label>Carbs %</label><input type="number" id="target-c-pct" onchange="updateTargets()"></div>
-            <div><label>Fat %</label><input type="number" id="target-f-pct" onchange="updateTargets()"></div>
+            <div><label>Protein</label><input type="number" id="target-p-pct" onchange="updateTargets()"></div>
+            <div><label>Carbs</label><input type="number" id="target-c-pct" onchange="updateTargets()"></div>
+            <div><label>Fat</label><input type="number" id="target-f-pct" onchange="updateTargets()"></div>
           </div>
-          <p style="font-size: 0.8rem; opacity: 0.7;">Note: Percentages should sum to 100%.</p>
+          <p style="font-size: 0.8rem; opacity: 0.7;">Note: All values are measured in grams.</p>
         </div>
       </section>
     </main>
@@ -330,19 +334,19 @@
       updateUI();
     }
 
-    function saveMeal() {
+function saveMeal() {
       const meal = {
-        name: document.getElementById('save-name').value,
-        cal: parseInt(document.getElementById('save-cal').value) || 0,
-        p: parseInt(document.getElementById('save-p').value) || 0,
-        c: parseInt(document.getElementById('save-c').value) || 0,
-        f: parseInt(document.getElementById('save-f').value) || 0,
+        name: document.getElementById('food-name').value,
+        cal: parseInt(document.getElementById('food-cal').value) || 0,
+        p: parseInt(document.getElementById('food-p').value) || 0,
+        c: parseInt(document.getElementById('food-c').value) || 0,
+        f: parseInt(document.getElementById('food-f').value) || 0,
       };
-      if (!meal.name) return;
+      if (!meal.name) return alert('Enter a meal name');
       state.saved.push(meal);
       saveState();
       updateUI();
-      ['save-name', 'save-cal', 'save-p', 'save-c', 'save-f'].forEach(id => document.getElementById(id).value = '');
+      ['food-name', 'food-cal', 'food-p', 'food-c', 'food-f'].forEach(id => document.getElementById(id).value = '');
     }
 
     function renderSaved() {
@@ -383,10 +387,39 @@
       document.getElementById('target-f-pct').value = state.targets.fPct;
     }
 
-    function renderHistory() {
-      // Simplified: history logic usually triggers on date change.
-      // For this MVP, we'll just show a placeholder or the current day's summary.
-      document.getElementById('history-list').innerHTML = '<p>History archive enabled. Export daily totals to .txt for long-term tracking.</p>';
+function renderHistory() {
+      const list = document.getElementById('history-list');
+      const dates = Object.keys(state.history).sort().reverse(); // newest first
+
+      if (dates.length === 0) {
+        list.innerHTML = '<p>No archived days yet. Use "Archive Day" on the Daily Log to save a completed day.</p>';
+        return;
+      }
+
+      list.innerHTML = dates.map(date => {
+        const day = state.history[date];
+        const totals = day.reduce((acc, item) => {
+          acc.cal += item.cal; acc.p += item.p; acc.c += item.c; acc.f += item.f;
+          return acc;
+        }, { cal: 0, p: 0, c: 0, f: 0 });
+
+        const items = day.map(item =>
+          `<div class="item-macros">${item.name} — ${item.cal}cal | P:${item.p} C:${item.c} F:${item.f}</div>`
+        ).join('');
+
+        return `
+          <div class="card">
+            <h3 style="margin-top: 0; color: var(--heading);">${date}</h3>
+            <div style="margin-bottom: 0.5rem;">
+              <strong>Totals:</strong> ${totals.cal} kcal | P:${totals.p}g C:${totals.c}g F:${totals.f}g
+            </div>
+            <details>
+              <summary style="cursor: pointer; color: var(--accent-2);">Show ${day.length} entries</summary>
+              <div style="margin-top: 0.5rem;">${items}</div>
+            </details>
+          </div>
+        `;
+      }).join('');
     }
 
     function exportHistory() {
@@ -410,6 +443,16 @@
         localStorage.clear();
         location.reload();
       }
+    }
+
+    function archiveDay() {
+      if (state.daily.length === 0) return alert('No entries to archive.');
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      state.history[today] = [...state.daily]; // copy, don't reference
+      state.daily = [];
+      saveState();
+      updateUI();
+      alert(`Day archived to ${today}.`);
     }
 
     // --- Navigation & UX ---
