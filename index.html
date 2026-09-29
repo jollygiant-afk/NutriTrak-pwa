@@ -380,16 +380,6 @@ function updateTargets() {
       showAdminMsg('Targets saved.', false);
     }
 
-      state.targets.cal  = cal;
-      state.targets.pPct = pPct;
-      state.targets.cPct = cPct;
-      state.targets.fPct = fPct;
-
-      saveState();
-      updateUI();   // re-renders the top-banner pills via renderTopBar()
-      showAdminMsg('Targets saved.', false);
-    }
-
     function showAdminMsg(text, isError) {
       const el = document.getElementById('admin-msg');
       el.textContent = text;
